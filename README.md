@@ -92,6 +92,12 @@ npm run build
 - 如果配置了 `LDXP_RESTART_COMMAND`，系统会执行该命令，例如 `LDXP_RESTART_COMMAND="pm2 restart ldxpPrice"`。
 - 如果两者都没有，系统会在更新完成后退出当前 Node 进程，需要 systemd、Docker、宝塔等外部守护进程自动拉起。
 
+容器部署：
+
+- 容器里通常没有 `.git` 目录，建议设置 `LDXP_DEPLOY_MODE=container`，并在构建镜像时注入环境变量，例如 `LDXP_COMMIT_SHA`、`LDXP_VERSION`、`LDXP_IMAGE`。
+- 后台会通过 GitHub API 检查 `Yiyoki/liandongxiaopu-collection` 的 `main` 最新提交。可用 `LDXP_GITHUB_REPO` 和 `LDXP_GITHUB_BRANCH` 覆盖。
+- 容器无法可靠地在内部替换自己，后台自更新需要配置 `LDXP_CONTAINER_UPDATE_COMMAND` 或 `LDXP_UPDATE_COMMAND`，例如触发宿主机 webhook、调用 Portainer API、或执行你自己封装的 compose 更新脚本。
+
 ## 上游反爬
 
 部分服务器出口 IP 请求 `https://pay.ldxp.cn/shopApi/*` 时，链动小铺上游可能返回 `text/html` 的 JS 验证页，内容类似 `<html><script>var arg1=...`，而不是 JSON。本项目后端会识别该响应，自动计算并携带 `acw_sc__v2` cookie 后重试一次。
@@ -120,6 +126,12 @@ npm run diagnose:upstream -- https://pay.ldxp.cn/shop/VK6TGVU1
 ```
 
 命令会把诊断报告和上游原始响应保存到 `diagnostics/`。如果上游返回 HTML 验证页，把生成的 `*-report.json` 和 `*-attempt-1.html` 内容用于分析即可；里面会包含状态码、响应头摘要、`arg1` 是否存在、是否生成 `acw_sc__v2`、以及重试后的结果。
+
+为了降低触发风控的概率，后端会对所有链动小铺上游请求做串行节流，默认每次请求至少间隔 `800ms`。可以通过 `LDXP_UPSTREAM_MIN_INTERVAL_MS` 调整，例如：
+
+```bash
+LDXP_UPSTREAM_MIN_INTERVAL_MS=1500 npm start
+```
 
 ## 注意
 

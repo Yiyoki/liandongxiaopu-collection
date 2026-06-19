@@ -9,13 +9,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const pm2Command = process.platform === 'win32' ? 'pm2.cmd' : 'pm2';
+const githubRepo = process.env.LDXP_GITHUB_REPO || 'Yiyoki/liandongxiaopu-collection';
+const githubBranch = process.env.LDXP_GITHUB_BRANCH || 'main';
 
 let updateInProgress = false;
 
 export async function getVersionInfo({ checkRemote = false } = {}) {
   const info = {
     updateInProgress,
+    mode: 'git',
     isGitRepo: false,
+    isContainer: isContainerRuntime(),
     branch: null,
     remote: null,
     remoteBranch: null,
@@ -23,6 +27,8 @@ export async function getVersionInfo({ checkRemote = false } = {}) {
     localShortHash: null,
     remoteHash: null,
     remoteShortHash: null,
+    image: process.env.LDXP_IMAGE || process.env.IMAGE_NAME || null,
+    version: process.env.LDXP_VERSION || process.env.npm_package_version || null,
     ahead: 0,
     behind: 0,
     dirty: false,
@@ -31,11 +37,15 @@ export async function getVersionInfo({ checkRemote = false } = {}) {
     remoteError: null
   };
 
+  if (process.env.LDXP_DEPLOY_MODE === 'container') {
+    return getContainerVersionInfo(info, { checkRemote });
+  }
+
   try {
     const inside = await runGit(['rev-parse', '--is-inside-work-tree']);
     info.isGitRepo = inside.stdout.trim() === 'true';
   } catch {
-    return info;
+    return getContainerVersionInfo(info, { checkRemote });
   }
 
   info.branch = (await runGit(['branch', '--show-current'])).stdout.trim() || 'main';
@@ -76,6 +86,9 @@ export async function runSelfUpdate() {
   updateInProgress = true;
   try {
     const before = await getVersionInfo({ checkRemote: true });
+    if (before.mode === 'container') {
+      return await runContainerUpdate(before);
+    }
     if (!before.isGitRepo) {
       throw httpError(400, 'Current deployment is not a Git repository');
     }
@@ -115,6 +128,92 @@ export async function runSelfUpdate() {
   } finally {
     updateInProgress = false;
   }
+}
+
+async function getContainerVersionInfo(info, { checkRemote }) {
+  const localHash = process.env.LDXP_COMMIT_SHA ||
+    process.env.GIT_COMMIT ||
+    process.env.SOURCE_VERSION ||
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    null;
+
+  info.mode = 'container';
+  info.branch = githubBranch;
+  info.remote = `https://github.com/${githubRepo}.git`;
+  info.remoteBranch = `origin/${githubBranch}`;
+  info.localHash = localHash;
+  info.localShortHash = shortHash(localHash) || info.version || info.image || 'container';
+
+  if (checkRemote) {
+    try {
+      const latest = await fetchGithubLatestCommit();
+      info.remoteHash = latest.sha;
+      info.remoteShortHash = shortHash(latest.sha);
+      info.hasUpdate = Boolean(localHash && latest.sha && !latest.sha.startsWith(localHash) && !localHash.startsWith(latest.sha));
+      if (!localHash) {
+        info.remoteError = 'Container version env is not set. Set LDXP_COMMIT_SHA at image build time to compare updates.';
+      }
+    } catch (error) {
+      info.remoteError = error.message;
+    }
+  }
+
+  return info;
+}
+
+async function runContainerUpdate(before) {
+  const command = process.env.LDXP_CONTAINER_UPDATE_COMMAND || process.env.LDXP_UPDATE_COMMAND;
+  if (!command) {
+    throw httpError(
+      400,
+      'Container self update requires LDXP_CONTAINER_UPDATE_COMMAND. Use it to trigger your compose/pull/recreate workflow from the host or orchestrator.'
+    );
+  }
+
+  const started = spawn(command, {
+    cwd: rootDir,
+    env: process.env,
+    shell: true,
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true
+  });
+  started.unref();
+
+  return {
+    updated: true,
+    message: 'Container update command started.',
+    version: before,
+    restart: { scheduled: true, mode: 'container-command', command }
+  };
+}
+
+async function fetchGithubLatestCommit() {
+  const url = `https://api.github.com/repos/${githubRepo}/commits/${githubBranch}`;
+  const response = await fetch(url, {
+    headers: {
+      accept: 'application/vnd.github+json',
+      'user-agent': 'ldxp-price-board'
+    },
+    signal: AbortSignal.timeout(15000)
+  });
+  if (!response.ok) {
+    throw new Error(`GitHub version check failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+function isContainerRuntime() {
+  return Boolean(
+    process.env.LDXP_DEPLOY_MODE === 'container' ||
+    process.env.KUBERNETES_SERVICE_HOST ||
+    process.env.DOCKER_CONTAINER ||
+    process.env.HOSTNAME
+  );
+}
+
+function shortHash(value) {
+  return value ? String(value).slice(0, 7) : null;
 }
 
 async function optionalGit(args) {

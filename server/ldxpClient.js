@@ -3,6 +3,7 @@ import { classifyProduct } from './groups.js';
 const BASE_URL = 'https://pay.ldxp.cn';
 const GOODS_TYPES = ['card', 'article', 'resource', 'equity'];
 const UPSTREAM_TIMEOUT_MS = Number(process.env.LDXP_UPSTREAM_TIMEOUT_MS || 20000);
+const UPSTREAM_MIN_INTERVAL_MS = Number(process.env.LDXP_UPSTREAM_MIN_INTERVAL_MS || 800);
 const ACW_SC_V2_COOKIE = 'acw_sc__v2';
 const ACW_SC_V2_KEY = '3000176000856006061501533003690027800375';
 const ACW_SC_V2_UNSBOX_INDEXES = [
@@ -12,6 +13,8 @@ const ACW_SC_V2_UNSBOX_INDEXES = [
   0x7, 0x4, 0x11, 0x5, 0x3, 0x1c, 0x22, 0x25, 0xc, 0x24
 ];
 const upstreamCookies = new Map();
+let upstreamGate = Promise.resolve();
+let lastUpstreamRequestAt = 0;
 
 export function normalizeShopUrl(input) {
   if (!input || typeof input !== 'string') {
@@ -267,18 +270,33 @@ async function diagnosticShopApi(pathname, body, options = {}) {
 
 async function fetchShopApi(pathname, body) {
   try {
-    return await fetch(`${BASE_URL}${pathname}`, {
+    return await scheduleUpstreamRequest(() => fetch(`${BASE_URL}${pathname}`, {
       method: 'POST',
       headers: buildShopApiHeaders(body),
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
-    });
+    }));
   } catch (error) {
     if (error.name === 'TimeoutError' || error.name === 'AbortError') {
       throw httpError(504, `链动小铺上游请求超时：${UPSTREAM_TIMEOUT_MS}ms`);
     }
     throw httpError(502, `无法连接链动小铺上游：${error.message}`);
   }
+}
+
+async function scheduleUpstreamRequest(operation) {
+  const run = upstreamGate.catch(() => {}).then(async () => {
+    const waitMs = Math.max(0, UPSTREAM_MIN_INTERVAL_MS - (Date.now() - lastUpstreamRequestAt));
+    if (waitMs > 0) await sleep(waitMs);
+    lastUpstreamRequestAt = Date.now();
+    return operation();
+  });
+  upstreamGate = run.catch(() => {});
+  return run;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function buildShopApiHeaders(body) {

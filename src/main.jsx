@@ -575,6 +575,8 @@ function AdminView({
             <VersionLine label={t('currentVersion')} value={versionInfo?.localShortHash || '-'} />
             <VersionLine label={t('remoteVersion')} value={versionInfo?.remoteShortHash || '-'} />
             <VersionLine label={t('branch')} value={versionInfo?.branch || '-'} />
+            <VersionLine label={t('deployMode')} value={versionInfo?.mode || '-'} />
+            {versionInfo?.image || versionInfo?.version ? <VersionLine label={t('imageVersion')} value={[versionInfo?.image, versionInfo?.version].filter(Boolean).join(' / ')} /> : null}
             {versionInfo?.dirty ? <div className="warning-line">{t('localChanges')}</div> : null}
             {versionInfo?.remoteError ? <div className="warning-line">{versionInfo.remoteError}</div> : null}
             <div className="button-row">
