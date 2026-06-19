@@ -379,7 +379,7 @@ export function extractAcwArg1(html) {
 function unsbox(value) {
   const result = new Array(value.length);
   for (let index = 0; index < ACW_SC_V2_UNSBOX_INDEXES.length; index += 1) {
-    result[ACW_SC_V2_UNSBOX_INDEXES[index]] = value[index];
+    result[index] = value[ACW_SC_V2_UNSBOX_INDEXES[index] - 1];
   }
   return result.join('');
 }

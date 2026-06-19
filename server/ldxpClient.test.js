@@ -13,5 +13,11 @@ test('returns null when upstream HTML has no acw challenge', () => {
 
 test('calculates acw_sc__v2 cookie from challenge arg1', () => {
   const html = '<html><script>var arg1="0123456789abcdef0123456789abcdef01234567";</script></html>';
-  assert.equal(resolveAcwScV2Cookie(html), '5c2f058798b3780303b39fa03bd044ba63975439');
+  assert.equal(resolveAcwScV2Cookie(html), 'd2c7186598ab1a508a4f6064e4fa746323ab17c6');
+});
+
+test('calculates acw_sc__v2 cookie from captured upstream challenge arg1', () => {
+  const html = "<html><script>var arg1='362C5C9AEF9E9450300E167586693D9A61A651A6';</script></html>";
+  assert.equal(extractAcwArg1(html), '362C5C9AEF9E9450300E167586693D9A61A651A6');
+  assert.equal(resolveAcwScV2Cookie(html), '6a357751fe8c06618fdca1b971a5049c12a91693');
 });
