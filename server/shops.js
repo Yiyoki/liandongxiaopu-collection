@@ -180,6 +180,7 @@ export async function updateSettings(input) {
   const settings = {
     ...store.settings,
     siteTitle: sanitizeText(input?.siteTitle, store.settings.siteTitle || '链动小铺比价台'),
+    language: sanitizeLanguage(input?.language, store.settings.language || 'zh-CN'),
     adminPassword: sanitizePassword(input?.newAdminPassword, store.settings.adminPassword),
     autoRefreshEnabled: Boolean(input?.autoRefreshEnabled),
     refreshIntervalMinutes: Number.isFinite(refreshIntervalMinutes)
@@ -265,6 +266,10 @@ function sanitizeText(value, fallback) {
 function sanitizePassword(value, fallback) {
   if (typeof value !== 'string' || value.trim().length === 0) return fallback;
   return value.trim().slice(0, 80);
+}
+
+function sanitizeLanguage(value, fallback) {
+  return ['zh-CN', 'en-US'].includes(value) ? value : fallback;
 }
 
 function publicSettings(settings) {

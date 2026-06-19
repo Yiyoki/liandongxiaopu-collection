@@ -11,6 +11,7 @@
 - 后台手动修改商品分类并持久保存
 - 后台手动删除商品；定时刷新不会恢复，手动刷新会重新拉回
 - 定时刷新，默认 15 分钟
+- 后台支持切换中文 / English 界面语言
 - `/admin` 管理后台密码保护
 
 ## 启动
@@ -44,6 +45,12 @@ $env:ADMIN_PASSWORD="your-password"; npm run dev
 如果没有设置 `ADMIN_PASSWORD`，系统会读取本地 `data/shops.json` 中的 `settings.adminPassword`。该文件包含本地店铺数据和密码，不应提交到公开仓库。
 
 在管理后台修改密码时，系统会同步更新本地 `.env` 文件中的 `ADMIN_PASSWORD`，并强制退出后台，需要使用新密码重新登录。
+
+界面语言在 `/admin` 的“定时刷新”配置区切换，当前支持 `zh-CN` 和 `en-US`。前端可见文案集中在 `src/i18n.js`，默认语言会保存到本地 `data/shops.json` 的 `settings.language`。
+
+## 编码
+
+项目源码、文档和本地 JSON 数据都按 UTF-8 读写，并通过 `.gitattributes` 统一为 LF 换行，方便在 Windows 和 Linux 间部署。如果 Windows 终端直接查看中文出现乱码，优先检查终端代码页或字体；应用运行和文件内容仍以 UTF-8 为准。
 
 ## 生产构建
 
