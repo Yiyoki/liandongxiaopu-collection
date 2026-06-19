@@ -95,9 +95,9 @@ export async function fetchShopSnapshot(url) {
   };
 }
 
-export async function diagnoseUpstream(url) {
+export async function diagnoseUpstream(url, options = {}) {
   const normalized = normalizeShopUrl(url);
-  const first = await diagnosticShopApi('/shopApi/Shop/info', { token: normalized.token });
+  const first = await diagnosticShopApi('/shopApi/Shop/info', { token: normalized.token }, options);
   const result = {
     token: normalized.token,
     shopUrl: normalized.url,
@@ -107,7 +107,7 @@ export async function diagnoseUpstream(url) {
 
   if (first.challenge?.cookie && !first.json) {
     upstreamCookies.set(ACW_SC_V2_COOKIE, first.challenge.cookie);
-    result.attempts.push(await diagnosticShopApi('/shopApi/Shop/info', { token: normalized.token }));
+    result.attempts.push(await diagnosticShopApi('/shopApi/Shop/info', { token: normalized.token }, options));
   }
 
   return result;
@@ -201,8 +201,10 @@ async function requestShopApi(pathname, body, allowChallengeRetry) {
   return payload;
 }
 
-async function diagnosticShopApi(pathname, body) {
+async function diagnosticShopApi(pathname, body, options = {}) {
   const startedAt = Date.now();
+  const includeBody = Boolean(options.includeBody);
+  const previewLength = Number(options.bodyPreviewLength || 800);
   try {
     const response = await fetchShopApi(pathname, body);
     rememberSetCookies(response.headers);
@@ -217,9 +219,12 @@ async function diagnosticShopApi(pathname, body) {
     }
 
     return {
+      pathname,
       ok: response.ok,
       status: response.status,
       contentType: response.headers.get('content-type') || '',
+      setCookieNames: setCookieNames(response.headers),
+      responseHeaders: diagnosticHeaders(response.headers),
       durationMs: Date.now() - startedAt,
       json: json ? {
         code: json.code,
@@ -232,13 +237,18 @@ async function diagnosticShopApi(pathname, body) {
         cookieGenerated: Boolean(challengeCookie),
         cookie: challengeCookie
       },
-      bodyPreview: compactText(text)
+      bodyPreview: compactText(text, previewLength),
+      bodyLength: text.length,
+      body: includeBody ? text : undefined
     };
   } catch (error) {
     return {
+      pathname,
       ok: false,
       status: error.status || 0,
       contentType: '',
+      setCookieNames: [],
+      responseHeaders: {},
       durationMs: Date.now() - startedAt,
       json: null,
       challenge: {
@@ -248,7 +258,9 @@ async function diagnosticShopApi(pathname, body) {
         cookie: null
       },
       error: error.message,
-      bodyPreview: ''
+      bodyPreview: '',
+      bodyLength: 0,
+      body: includeBody ? '' : undefined
     };
   }
 }
@@ -319,6 +331,31 @@ function splitSetCookieHeader(value) {
   return value.split(/,(?=\s*[^;,]+=)/).map((item) => item.trim()).filter(Boolean);
 }
 
+function setCookieNames(headers) {
+  const values = typeof headers.getSetCookie === 'function'
+    ? headers.getSetCookie()
+    : splitSetCookieHeader(headers.get('set-cookie'));
+
+  return values.map((value) => value.split(';')[0].split('=')[0]).filter(Boolean);
+}
+
+function diagnosticHeaders(headers) {
+  const names = [
+    'content-type',
+    'date',
+    'server',
+    'x-cache',
+    'x-sws-request-id',
+    'x-request-id',
+    'via'
+  ];
+  return Object.fromEntries(
+    names
+      .map((name) => [name, headers.get(name)])
+      .filter(([, value]) => value)
+  );
+}
+
 function isHtmlResponse(response, text) {
   const contentType = response.headers.get('content-type') || '';
   const trimmed = text.trimStart();
@@ -357,10 +394,10 @@ function hexXor(value, key) {
   return result;
 }
 
-function compactText(value) {
+function compactText(value, maxLength = 800) {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
-  if (text.length <= 800) return text;
-  return `${text.slice(0, 800)}...`;
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength)}...`;
 }
 
 function normalizeProduct(product, goodsType, shopToken) {

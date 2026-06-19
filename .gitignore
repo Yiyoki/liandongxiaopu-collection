@@ -1,6 +1,8 @@
 node_modules/
 dist/
 data/
+diagnostics/
+diagnostics-*/
 *.log
 .env
 .env.*

@@ -8,6 +8,7 @@
     "dev:server": "node --watch server/index.js",
     "dev:client": "vite --host 127.0.0.1",
     "build": "vite build",
+    "diagnose:upstream": "node scripts/upstream-diagnostics.js",
     "test": "node --test",
     "start": "cross-env NODE_ENV=production node server/index.js"
   },

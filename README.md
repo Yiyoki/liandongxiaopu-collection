@@ -113,6 +113,14 @@ curl -X POST https://你的域名/api/upstream-diagnostics \
 
 诊断结果里的 `contentType`、`challenge.detected`、`challenge.cookieGenerated` 和 `bodyPreview` 可以判断是正常 JSON、JS 验证页、上游超时，还是出口 IP 被拦截。
 
+Linux 无界面服务器上也可以直接 SSH 进入项目目录运行：
+
+```bash
+npm run diagnose:upstream -- https://pay.ldxp.cn/shop/VK6TGVU1
+```
+
+命令会把诊断报告和上游原始响应保存到 `diagnostics/`。如果上游返回 HTML 验证页，把生成的 `*-report.json` 和 `*-attempt-1.html` 内容用于分析即可；里面会包含状态码、响应头摘要、`arg1` 是否存在、是否生成 `acw_sc__v2`、以及重试后的结果。
+
 ## 注意
 
 - 本项目只保存本地快照，不记录价格历史曲线。
