@@ -1,3 +1,5 @@
+import './loadEnv.js';
+
 const DEFAULT_ADMIN_PASSWORD = 'admin123';
 import { readStore } from './storage.js';
 
@@ -16,6 +18,10 @@ export async function requireAdmin(req, res, next) {
 export async function verifyAdminPassword(password) {
   const expected = await getAdminPassword();
   return password === expected;
+}
+
+export function setRuntimeAdminPassword(password) {
+  process.env.ADMIN_PASSWORD = password;
 }
 
 async function getAdminPassword() {

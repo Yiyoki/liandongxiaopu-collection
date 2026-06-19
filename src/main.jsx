@@ -185,9 +185,10 @@ function App() {
       });
       const settings = await readJson(response);
       setData((current) => ({ ...current, settings }));
-      setAdminPassword(newAdminPassword);
-      sessionStorage.setItem('adminPassword', newAdminPassword);
-      setMessage('管理密码已修改');
+      sessionStorage.removeItem('adminPassword');
+      setAdminPassword('');
+      setAdminAuthed(false);
+      setMessage('管理密码已修改，请重新登录');
     } catch (error) {
       setMessage(error.message);
     }
@@ -826,7 +827,26 @@ function SelectControl({ icon, value, onChange, children }) {
 }
 
 async function readJson(response) {
-  const payload = await response.json().catch(() => ({}));
+  const contentType = response.headers.get('content-type') || '';
+  const text = await response.text();
+  let payload = {};
+
+  if (contentType.includes('application/json')) {
+    try {
+      payload = text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error('服务器返回了无效 JSON');
+    }
+  } else if (text.trim().startsWith('<')) {
+    throw new Error(`接口返回了 HTML 页面，可能是部署代理没有把 /api 转发到后端。状态码：${response.status}`);
+  } else if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = { message: text };
+    }
+  }
+
   if (!response.ok) {
     throw new Error(payload.message || '请求失败');
   }

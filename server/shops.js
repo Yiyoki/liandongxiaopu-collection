@@ -1,6 +1,8 @@
 import { fetchShopSnapshot, normalizeShopUrl } from './ldxpClient.js';
 import { groupOptions } from './groups.js';
 import { readStore, writeStore } from './storage.js';
+import { upsertEnvValue } from './envFile.js';
+import { setRuntimeAdminPassword } from './auth.js';
 
 export async function listShops() {
   const store = await readStore();
@@ -186,6 +188,11 @@ export async function updateSettings(input) {
   };
 
   await writeStore({ ...store, settings });
+  if (typeof input?.newAdminPassword === 'string' && input.newAdminPassword.trim().length > 0) {
+    const adminPassword = sanitizePassword(input.newAdminPassword, store.settings.adminPassword);
+    await upsertEnvValue('ADMIN_PASSWORD', adminPassword);
+    setRuntimeAdminPassword(adminPassword);
+  }
   return publicSettings(settings);
 }
 

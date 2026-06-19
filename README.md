@@ -43,11 +43,26 @@ $env:ADMIN_PASSWORD="your-password"; npm run dev
 
 如果没有设置 `ADMIN_PASSWORD`，系统会读取本地 `data/shops.json` 中的 `settings.adminPassword`。该文件包含本地店铺数据和密码，不应提交到公开仓库。
 
+在管理后台修改密码时，系统会同步更新本地 `.env` 文件中的 `ADMIN_PASSWORD`，并强制退出后台，需要使用新密码重新登录。
+
 ## 生产构建
 
 ```bash
 npm run build
 npm start
+```
+
+生产环境建议直接让 Node 服务同时托管 API 和前端静态文件：
+
+```bash
+npm run build
+npm start
+```
+
+如果你把前端部署到 Nginx、宝塔、Vercel 等静态站点环境，需要把 `/api/*` 反向代理到 Node 后端。否则前端请求 `/api/shops`、`/api/shops` 添加店铺等接口时，会拿到前端 `index.html`，出现类似下面的错误：
+
+```text
+Unexpected token '<', "<html><scr"... is not valid JSON
 ```
 
 ## 注意
