@@ -12,6 +12,7 @@
 - 后台手动删除商品；定时刷新不会恢复，手动刷新会重新拉回
 - 定时刷新，默认 15 分钟
 - 后台支持切换中文 / English 界面语言
+- 后台显示当前版本，并支持从 GitHub 自更新和重启
 - `/admin` 管理后台密码保护
 
 ## 启动
@@ -71,6 +72,25 @@ npm start
 ```text
 Unexpected token '<', "<html><scr"... is not valid JSON
 ```
+
+## 后台自更新
+
+登录 `/admin` 后可以在“版本更新”卡片中检查 GitHub 是否有新提交，并执行自更新。更新流程会依次执行：
+
+```bash
+git fetch origin main
+git pull --ff-only origin main
+npm ci   # 如果没有 package-lock.json，则使用 npm install
+npm run build
+```
+
+为了保护部署现场，若当前服务器存在未提交的本地源码改动，后台会拒绝自更新。
+
+重启策略：
+
+- 如果使用 PM2 启动，系统会自动执行 `pm2 restart <pm_id>`。
+- 如果配置了 `LDXP_RESTART_COMMAND`，系统会执行该命令，例如 `LDXP_RESTART_COMMAND="pm2 restart ldxpPrice"`。
+- 如果两者都没有，系统会在更新完成后退出当前 Node 进程，需要 systemd、Docker、宝塔等外部守护进程自动拉起。
 
 ## 注意
 

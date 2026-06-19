@@ -33,6 +33,8 @@ function App() {
   const [adminPassword, setAdminPassword] = useState(() => sessionStorage.getItem('adminPassword') || '');
   const [adminAuthed, setAdminAuthed] = useState(() => Boolean(sessionStorage.getItem('adminPassword')));
   const [loading, setLoading] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [versionInfo, setVersionInfo] = useState(null);
   const [message, setMessage] = useState('');
   const [query, setQuery] = useState('');
   const [shopFilter, setShopFilter] = useState('all');
@@ -203,6 +205,45 @@ function App() {
     }
   };
 
+  const loadVersionInfo = async (checkRemote = false) => {
+    if (!isAdminRoute || !adminAuthed) return;
+    if (checkRemote) setMessage(t('checkingUpdate'));
+    try {
+      const response = await fetch(`/api/version${checkRemote ? '?check=1' : ''}`, {
+        headers: adminHeaders()
+      });
+      const payload = await readJson(response, t);
+      setVersionInfo(payload);
+      if (checkRemote) {
+        setMessage(payload.hasUpdate ? t('updateAvailable') : t('upToDate'));
+      }
+    } catch (error) {
+      setMessage(error.message);
+    }
+  };
+
+  const selfUpdate = async () => {
+    if (!window.confirm(t('selfUpdate'))) return;
+
+    setUpdating(true);
+    setMessage(t('updatingApp'));
+    try {
+      const response = await fetch('/api/update', {
+        method: 'POST',
+        headers: adminHeaders()
+      });
+      const payload = await readJson(response, t);
+      setVersionInfo(payload.version || versionInfo);
+      setMessage(payload.updated
+        ? t('updateInstalledWithRestart', { restart: t('restartMode', { mode: payload.restart?.mode || 'unknown' }) })
+        : t('updateNotNeeded'));
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const changeProductGroup = async (product, groupId) => {
     const nextGroupLabel = groupLabel(groupId, language);
     setData((current) => ({
@@ -299,6 +340,12 @@ function App() {
     })
   ), [data.groups, data.products, language]);
 
+  useEffect(() => {
+    if (isAdminRoute && adminAuthed) {
+      loadVersionInfo(false);
+    }
+  }, [isAdminRoute, adminAuthed]);
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -356,7 +403,11 @@ function App() {
               removeShop={removeShop}
               updateSettings={updateSettings}
               updateAdminPassword={updateAdminPassword}
+              versionInfo={versionInfo}
+              loadVersionInfo={loadVersionInfo}
+              selfUpdate={selfUpdate}
               loading={loading}
+              updating={updating}
               filteredProducts={filteredProducts}
               changeProductGroup={changeProductGroup}
               deleteProduct={deleteProduct}
@@ -431,7 +482,11 @@ function AdminView({
   removeShop,
   updateSettings,
   updateAdminPassword,
+  versionInfo,
+  loadVersionInfo,
+  selfUpdate,
   loading,
+  updating,
   filteredProducts,
   changeProductGroup,
   deleteProduct,
@@ -510,6 +565,30 @@ function AdminView({
             </button>
           </div>
         </div>
+
+        <div className="management-panel">
+          <div className="panel-header compact-header">
+            <h2>{t('versionUpdate')}</h2>
+            <span>{versionInfo ? (versionInfo.hasUpdate ? t('updateAvailable') : t('upToDate')) : t('noVersionInfo')}</span>
+          </div>
+          <div className="settings-form">
+            <VersionLine label={t('currentVersion')} value={versionInfo?.localShortHash || '-'} />
+            <VersionLine label={t('remoteVersion')} value={versionInfo?.remoteShortHash || '-'} />
+            <VersionLine label={t('branch')} value={versionInfo?.branch || '-'} />
+            {versionInfo?.dirty ? <div className="warning-line">{t('localChanges')}</div> : null}
+            {versionInfo?.remoteError ? <div className="warning-line">{versionInfo.remoteError}</div> : null}
+            <div className="button-row">
+              <button className="secondary-button" type="button" onClick={() => loadVersionInfo(true)} disabled={updating}>
+                <RefreshCcw size={16} />
+                {t('checkUpdate')}
+              </button>
+              <button className="primary-button" type="button" onClick={selfUpdate} disabled={updating || versionInfo?.dirty}>
+                <RefreshCcw size={16} />
+                {t('selfUpdate')}
+              </button>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="product-panel">
@@ -579,6 +658,15 @@ function AdminLogin({ adminPassword, setAdminPassword, loginAdmin, t }) {
         </div>
       </form>
     </section>
+  );
+}
+
+function VersionLine({ label, value }) {
+  return (
+    <div className="version-line">
+      <span>{label}</span>
+      <b>{value}</b>
+    </div>
   );
 }
 

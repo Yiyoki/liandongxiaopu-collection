@@ -443,6 +443,36 @@ select {
   gap: 12px;
 }
 
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.version-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #667287;
+  font-size: 13px;
+}
+
+.version-line b {
+  color: #162033;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 13px;
+}
+
+.warning-line {
+  border: 1px solid #f0d2a9;
+  background: #fff8eb;
+  color: #805018;
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: 13px;
+}
+
 .managed-shops {
   padding: 12px;
   display: grid;

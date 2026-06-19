@@ -15,6 +15,7 @@ import {
 } from './shops.js';
 import { startScheduler } from './scheduler.js';
 import { requireAdmin, verifyAdminPassword } from './auth.js';
+import { getVersionInfo, runSelfUpdate } from './updater.js';
 
 const app = express();
 const port = Number(process.env.PORT || 4177);
@@ -71,6 +72,22 @@ app.post('/api/shops/refresh-all', requireAdmin, async (req, res, next) => {
 app.get('/api/settings', async (req, res, next) => {
   try {
     res.json(await getSettings());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/version', requireAdmin, async (req, res, next) => {
+  try {
+    res.json(await getVersionInfo({ checkRemote: req.query.check === '1' }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/update', requireAdmin, async (req, res, next) => {
+  try {
+    res.json(await runSelfUpdate());
   } catch (error) {
     next(error);
   }
