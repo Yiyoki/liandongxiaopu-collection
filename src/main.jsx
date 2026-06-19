@@ -839,7 +839,7 @@ async function readJson(response, t = createTranslator('zh-CN')) {
       throw new Error(t('invalidJson'));
     }
   } else if (text.trim().startsWith('<')) {
-    throw new Error(t('htmlResponse', { status: response.status }));
+    throw new Error(t(response.status >= 500 ? 'htmlGatewayResponse' : 'htmlResponse', { status: response.status }));
   } else if (text) {
     try {
       payload = JSON.parse(text);

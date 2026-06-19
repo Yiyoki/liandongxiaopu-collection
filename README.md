@@ -102,6 +102,17 @@ npm run build
 - 在服务器环境变量中配置浏览器访问链动小铺后得到的 cookie 值：`LDXP_ACW_SC_V2=你的acw_sc__v2值`。
 - 使用更稳定的代理出口，并确保 Node 进程能访问上游 `pay.ldxp.cn`。
 
+也可以用管理密码调用诊断接口查看服务器实际拿到的上游响应：
+
+```bash
+curl -X POST https://你的域名/api/upstream-diagnostics \
+  -H "content-type: application/json" \
+  -H "x-admin-password: 你的管理密码" \
+  -d '{"url":"https://pay.ldxp.cn/shop/VK6TGVU1"}'
+```
+
+诊断结果里的 `contentType`、`challenge.detected`、`challenge.cookieGenerated` 和 `bodyPreview` 可以判断是正常 JSON、JS 验证页、上游超时，还是出口 IP 被拦截。
+
 ## 注意
 
 - 本项目只保存本地快照，不记录价格历史曲线。

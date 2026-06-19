@@ -2,6 +2,7 @@ import { classifyProduct } from './groups.js';
 
 const BASE_URL = 'https://pay.ldxp.cn';
 const GOODS_TYPES = ['card', 'article', 'resource', 'equity'];
+const UPSTREAM_TIMEOUT_MS = Number(process.env.LDXP_UPSTREAM_TIMEOUT_MS || 20000);
 const ACW_SC_V2_COOKIE = 'acw_sc__v2';
 const ACW_SC_V2_KEY = '3000176000856006061501533003690027800375';
 const ACW_SC_V2_UNSBOX_INDEXES = [
@@ -94,6 +95,24 @@ export async function fetchShopSnapshot(url) {
   };
 }
 
+export async function diagnoseUpstream(url) {
+  const normalized = normalizeShopUrl(url);
+  const first = await diagnosticShopApi('/shopApi/Shop/info', { token: normalized.token });
+  const result = {
+    token: normalized.token,
+    shopUrl: normalized.url,
+    checkedAt: new Date().toISOString(),
+    attempts: [first]
+  };
+
+  if (first.challenge?.cookie && !first.json) {
+    upstreamCookies.set(ACW_SC_V2_COOKIE, first.challenge.cookie);
+    result.attempts.push(await diagnosticShopApi('/shopApi/Shop/info', { token: normalized.token }));
+  }
+
+  return result;
+}
+
 async function fetchCategories(token, goodsType) {
   try {
     const response = await postShopApi('/shopApi/Shop/categoryList', {
@@ -152,11 +171,7 @@ async function postShopApi(pathname, body) {
 }
 
 async function requestShopApi(pathname, body, allowChallengeRetry) {
-  const response = await fetch(`${BASE_URL}${pathname}`, {
-    method: 'POST',
-    headers: buildShopApiHeaders(body),
-    body: JSON.stringify(body)
-  });
+  const response = await fetchShopApi(pathname, body);
   rememberSetCookies(response.headers);
   const text = await response.text();
 
@@ -184,6 +199,74 @@ async function requestShopApi(pathname, body, allowChallengeRetry) {
     throw httpError(502, '链动小铺接口返回了无效 JSON');
   }
   return payload;
+}
+
+async function diagnosticShopApi(pathname, body) {
+  const startedAt = Date.now();
+  try {
+    const response = await fetchShopApi(pathname, body);
+    rememberSetCookies(response.headers);
+    const text = await response.text();
+    const arg1 = extractAcwArg1(text);
+    const challengeCookie = arg1 ? resolveAcwScV2Cookie(text) : null;
+    let json = null;
+    try {
+      json = isHtmlResponse(response, text) ? null : JSON.parse(text || '{}');
+    } catch {
+      json = null;
+    }
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      contentType: response.headers.get('content-type') || '',
+      durationMs: Date.now() - startedAt,
+      json: json ? {
+        code: json.code,
+        msg: json.msg || null,
+        hasData: Boolean(json.data)
+      } : null,
+      challenge: {
+        detected: isHtmlResponse(response, text),
+        hasArg1: Boolean(arg1),
+        cookieGenerated: Boolean(challengeCookie),
+        cookie: challengeCookie
+      },
+      bodyPreview: compactText(text)
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: error.status || 0,
+      contentType: '',
+      durationMs: Date.now() - startedAt,
+      json: null,
+      challenge: {
+        detected: false,
+        hasArg1: false,
+        cookieGenerated: false,
+        cookie: null
+      },
+      error: error.message,
+      bodyPreview: ''
+    };
+  }
+}
+
+async function fetchShopApi(pathname, body) {
+  try {
+    return await fetch(`${BASE_URL}${pathname}`, {
+      method: 'POST',
+      headers: buildShopApiHeaders(body),
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
+    });
+  } catch (error) {
+    if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+      throw httpError(504, `链动小铺上游请求超时：${UPSTREAM_TIMEOUT_MS}ms`);
+    }
+    throw httpError(502, `无法连接链动小铺上游：${error.message}`);
+  }
 }
 
 function buildShopApiHeaders(body) {
@@ -272,6 +355,12 @@ function hexXor(value, key) {
     result += (left ^ right).toString(16).padStart(2, '0');
   }
   return result;
+}
+
+function compactText(value) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (text.length <= 800) return text;
+  return `${text.slice(0, 800)}...`;
 }
 
 function normalizeProduct(product, goodsType, shopToken) {

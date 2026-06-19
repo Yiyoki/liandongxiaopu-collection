@@ -16,6 +16,7 @@ import {
 import { startScheduler } from './scheduler.js';
 import { requireAdmin, verifyAdminPassword } from './auth.js';
 import { getVersionInfo, runSelfUpdate } from './updater.js';
+import { diagnoseUpstream } from './ldxpClient.js';
 
 const app = express();
 const port = Number(process.env.PORT || 4177);
@@ -88,6 +89,14 @@ app.get('/api/version', requireAdmin, async (req, res, next) => {
 app.post('/api/update', requireAdmin, async (req, res, next) => {
   try {
     res.json(await runSelfUpdate());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/upstream-diagnostics', requireAdmin, async (req, res, next) => {
+  try {
+    res.json(await diagnoseUpstream(req.body?.url));
   } catch (error) {
     next(error);
   }

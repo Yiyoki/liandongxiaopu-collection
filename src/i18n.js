@@ -118,6 +118,7 @@ const dictionaries = {
     adminEntered: '已进入管理后台',
     invalidJson: '服务器返回了无效 JSON',
     htmlResponse: '接口返回了 HTML 页面，可能是部署代理没有把 /api 转发到后端。状态码：{status}',
+    htmlGatewayResponse: '接口返回了 HTML 错误页。状态码：{status}。如果 /api/health 正常，通常是后端请求上游失败或网关超时。',
     requestFailed: '请求失败',
     defaultTitle: '链动小铺比价台'
   },
@@ -235,6 +236,7 @@ const dictionaries = {
     adminEntered: 'Admin signed in',
     invalidJson: 'Server returned invalid JSON',
     htmlResponse: 'API returned an HTML page. /api may not be proxied to the backend. Status: {status}',
+    htmlGatewayResponse: 'API returned an HTML error page. Status: {status}. If /api/health works, the backend likely failed or timed out while calling the upstream service.',
     requestFailed: 'Request failed',
     defaultTitle: 'LD Shop Price Board'
   }
