@@ -1,3 +1,4 @@
+import './loadEnv.js';
 import { execFile, spawn } from 'node:child_process';
 import { access } from 'node:fs/promises';
 import { promisify } from 'node:util';

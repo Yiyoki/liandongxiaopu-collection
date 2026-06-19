@@ -1,3 +1,4 @@
+import './loadEnv.js';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +21,7 @@ import { diagnoseUpstream } from './ldxpClient.js';
 
 const app = express();
 const port = Number(process.env.PORT || 4177);
+const host = process.env.HOST || process.env.BIND_HOST || '0.0.0.0';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 
@@ -157,7 +159,7 @@ app.use((error, req, res, next) => {
   });
 });
 
-app.listen(port, '127.0.0.1', () => {
-  console.log(`API server listening on http://127.0.0.1:${port}`);
+app.listen(port, host, () => {
+  console.log(`API server listening on http://${host}:${port}`);
   startScheduler();
 });

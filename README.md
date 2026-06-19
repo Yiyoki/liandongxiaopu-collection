@@ -73,6 +73,53 @@ npm start
 Unexpected token '<', "<html><scr"... is not valid JSON
 ```
 
+## Docker 部署
+
+项目已提供 `Dockerfile`、`.dockerignore` 和 `docker-compose.yml`。首次部署可以直接执行：
+
+```bash
+docker compose up -d --build
+```
+
+默认访问地址：
+
+- 主页面：http://服务器IP:4177
+- 管理后台：http://服务器IP:4177/admin
+
+建议先复制 `.env.example` 为 `.env`，再按需修改端口、上游节流等配置：
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+默认管理密码是 `admin123`。登录 `/admin` 后建议立即在后台修改密码；compose 默认不注入 `ADMIN_PASSWORD`，这样后台修改后的密码会保存在挂载的 `./data/shops.json` 中，容器重启后仍然有效。
+
+compose 会把宿主机的 `./data` 挂载到容器 `/app/data`，把 `./diagnostics` 挂载到容器 `/app/diagnostics`。店铺数据、管理密码和诊断文件都会保留在宿主机上，重建容器不会丢失。
+
+如果你一定要用环境变量强制指定管理密码，可以在 `docker-compose.yml` 的 `environment` 中手动加入 `ADMIN_PASSWORD`。这种方式会覆盖后台保存的密码；后台改密码只会影响当前进程，容器重启后仍以 compose 中的环境变量为准。
+
+如果希望后台版本信息能准确显示当前镜像对应的 Git 提交，可以在构建前注入版本变量：
+
+```bash
+export LDXP_COMMIT_SHA="$(git rev-parse HEAD)"
+export LDXP_VERSION="$(git describe --tags --always 2>/dev/null || git rev-parse --short HEAD)"
+export LDXP_IMAGE="ldxp-price-board:latest"
+docker compose up -d --build
+```
+
+也可以直接使用 `docker build`：
+
+```bash
+docker build \
+  --build-arg LDXP_COMMIT_SHA="$(git rev-parse HEAD)" \
+  --build-arg LDXP_VERSION="$(git describe --tags --always 2>/dev/null || git rev-parse --short HEAD)" \
+  --build-arg LDXP_IMAGE="ldxp-price-board:latest" \
+  -t ldxp-price-board:latest .
+```
+
+容器内默认监听 `0.0.0.0:4177`。如需修改宿主机暴露端口，可在 `.env` 中设置 `PORT=你的端口`。
+
 ## 后台自更新
 
 登录 `/admin` 后可以在“版本更新”卡片中检查 GitHub 是否有新提交，并执行自更新。更新流程会依次执行：
@@ -94,7 +141,8 @@ npm run build
 
 容器部署：
 
-- 容器里通常没有 `.git` 目录，建议设置 `LDXP_DEPLOY_MODE=container`，并在构建镜像时注入环境变量，例如 `LDXP_COMMIT_SHA`、`LDXP_VERSION`、`LDXP_IMAGE`。
+- 使用本仓库的 `docker-compose.yml` 时，已默认设置 `LDXP_DEPLOY_MODE=container`、`LDXP_DATA_DIR=/app/data` 和必要的版本变量入口。
+- 容器里通常没有 `.git` 目录，建议在构建镜像时注入环境变量，例如 `LDXP_COMMIT_SHA`、`LDXP_VERSION`、`LDXP_IMAGE`。
 - 后台会通过 GitHub API 检查 `Yiyoki/liandongxiaopu-collection` 的 `main` 最新提交。可用 `LDXP_GITHUB_REPO` 和 `LDXP_GITHUB_BRANCH` 覆盖。
 - 容器无法可靠地在内部替换自己，后台自更新需要配置 `LDXP_CONTAINER_UPDATE_COMMAND` 或 `LDXP_UPDATE_COMMAND`，例如触发宿主机 webhook、调用 Portainer API、或执行你自己封装的 compose 更新脚本。
 

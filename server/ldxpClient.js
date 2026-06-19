@@ -1,3 +1,4 @@
+import './loadEnv.js';
 import { classifyProduct } from './groups.js';
 
 const BASE_URL = 'https://pay.ldxp.cn';

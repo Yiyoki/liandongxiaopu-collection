@@ -1,0 +1,28 @@
+services:
+  ldxp-price-board:
+    build:
+      context: .
+      args:
+        LDXP_COMMIT_SHA: ${LDXP_COMMIT_SHA:-unknown}
+        LDXP_VERSION: ${LDXP_VERSION:-0.1.0}
+        LDXP_IMAGE: ${LDXP_IMAGE:-ldxp-price-board:latest}
+    image: ${LDXP_IMAGE:-ldxp-price-board:latest}
+    container_name: ldxp-price-board
+    restart: unless-stopped
+    ports:
+      - "${PORT:-4177}:4177"
+    environment:
+      NODE_ENV: production
+      PORT: 4177
+      HOST: 0.0.0.0
+      LDXP_DEPLOY_MODE: container
+      LDXP_DATA_DIR: /app/data
+      LDXP_GITHUB_REPO: ${LDXP_GITHUB_REPO:-Yiyoki/liandongxiaopu-collection}
+      LDXP_GITHUB_BRANCH: ${LDXP_GITHUB_BRANCH:-main}
+      LDXP_UPSTREAM_MIN_INTERVAL_MS: ${LDXP_UPSTREAM_MIN_INTERVAL_MS:-1200}
+      LDXP_UPSTREAM_TIMEOUT_MS: ${LDXP_UPSTREAM_TIMEOUT_MS:-30000}
+      LDXP_ACW_SC_V2: ${LDXP_ACW_SC_V2:-}
+      LDXP_CONTAINER_UPDATE_COMMAND: ${LDXP_CONTAINER_UPDATE_COMMAND:-}
+    volumes:
+      - ./data:/app/data
+      - ./diagnostics:/app/diagnostics
