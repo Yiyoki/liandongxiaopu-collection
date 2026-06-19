@@ -25,6 +25,7 @@
      - `/shopApi/Shop/info`
      - `/shopApi/Shop/categoryList`
      - `/shopApi/Shop/goodsList`
+   - 上游返回 HTML 反爬验证页时，后端识别 `arg1` 并计算 `acw_sc__v2` cookie 后重试。
    - 标准化外部字段，隐藏前端对第三方接口变化的依赖。
    - 根据原始分类、商品标题和描述进行关键词分组。
    - 支持 `店铺 token + 商品 key` 维度的手动分组覆盖，刷新商品后继续生效。

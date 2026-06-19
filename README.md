@@ -92,6 +92,16 @@ npm run build
 - 如果配置了 `LDXP_RESTART_COMMAND`，系统会执行该命令，例如 `LDXP_RESTART_COMMAND="pm2 restart ldxpPrice"`。
 - 如果两者都没有，系统会在更新完成后退出当前 Node 进程，需要 systemd、Docker、宝塔等外部守护进程自动拉起。
 
+## 上游反爬
+
+部分服务器出口 IP 请求 `https://pay.ldxp.cn/shopApi/*` 时，链动小铺上游可能返回 `text/html` 的 JS 验证页，内容类似 `<html><script>var arg1=...`，而不是 JSON。本项目后端会识别该响应，自动计算并携带 `acw_sc__v2` cookie 后重试一次。
+
+如果自动验证仍失败，后台会显示“链动小铺上游返回了反爬验证页”。可尝试：
+
+- 稍后重试，或更换服务器出口 IP。
+- 在服务器环境变量中配置浏览器访问链动小铺后得到的 cookie 值：`LDXP_ACW_SC_V2=你的acw_sc__v2值`。
+- 使用更稳定的代理出口，并确保 Node 进程能访问上游 `pay.ldxp.cn`。
+
 ## 注意
 
 - 本项目只保存本地快照，不记录价格历史曲线。

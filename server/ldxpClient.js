@@ -2,6 +2,15 @@ import { classifyProduct } from './groups.js';
 
 const BASE_URL = 'https://pay.ldxp.cn';
 const GOODS_TYPES = ['card', 'article', 'resource', 'equity'];
+const ACW_SC_V2_COOKIE = 'acw_sc__v2';
+const ACW_SC_V2_KEY = '3000176000856006061501533003690027800375';
+const ACW_SC_V2_UNSBOX_INDEXES = [
+  0xf, 0x23, 0x1d, 0x18, 0x21, 0x10, 0x1, 0x26, 0xa, 0x9,
+  0x13, 0x1f, 0x28, 0x1b, 0x16, 0x17, 0x19, 0xd, 0x6, 0xb,
+  0x27, 0x12, 0x14, 0x8, 0xe, 0x15, 0x20, 0x1a, 0x2, 0x1e,
+  0x7, 0x4, 0x11, 0x5, 0x3, 0x1c, 0x22, 0x25, 0xc, 0x24
+];
+const upstreamCookies = new Map();
 
 export function normalizeShopUrl(input) {
   if (!input || typeof input !== 'string') {
@@ -134,27 +143,135 @@ async function fetchGoodsByType(token, goodsType) {
 }
 
 async function postShopApi(pathname, body) {
-  const response = await fetch(`${BASE_URL}${pathname}`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      accept: 'application/json, text/plain, */*',
-      origin: BASE_URL,
-      referer: `${BASE_URL}/`
-    },
-    body: JSON.stringify(body)
-  });
-
-  if (!response.ok) {
-    throw httpError(response.status, `链动小铺接口请求失败：${response.status}`);
-  }
-
-  const payload = await response.json();
+  const payload = await requestShopApi(pathname, body, true);
   if (payload.code !== 1) {
     throw httpError(502, payload.msg || '链动小铺接口返回失败');
   }
 
   return payload;
+}
+
+async function requestShopApi(pathname, body, allowChallengeRetry) {
+  const response = await fetch(`${BASE_URL}${pathname}`, {
+    method: 'POST',
+    headers: buildShopApiHeaders(body),
+    body: JSON.stringify(body)
+  });
+  rememberSetCookies(response.headers);
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw httpError(response.status, `链动小铺接口请求失败：${response.status}`);
+  }
+
+  if (isHtmlResponse(response, text)) {
+    const challengeCookie = resolveAcwScV2Cookie(text);
+    if (challengeCookie && allowChallengeRetry) {
+      upstreamCookies.set(ACW_SC_V2_COOKIE, challengeCookie);
+      return requestShopApi(pathname, body, false);
+    }
+
+    throw httpError(
+      502,
+      '链动小铺上游返回了反爬验证页，自动验证失败。请稍后重试，或更换服务器出口 IP/配置代理。'
+    );
+  }
+
+  let payload;
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    throw httpError(502, '链动小铺接口返回了无效 JSON');
+  }
+  return payload;
+}
+
+function buildShopApiHeaders(body) {
+  const headers = {
+    'content-type': 'application/json;charset=UTF-8',
+    accept: 'application/json, text/plain, */*',
+    'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    origin: BASE_URL,
+    referer: body?.token ? `${BASE_URL}/shop/${encodeURIComponent(body.token)}` : `${BASE_URL}/`
+  };
+
+  const cookie = buildCookieHeader();
+  if (cookie) headers.cookie = cookie;
+
+  return headers;
+}
+
+function buildCookieHeader() {
+  const configuredCookie = process.env.LDXP_ACW_SC_V2 || process.env.LDXP_ACW_SC__V2;
+  if (configuredCookie && !upstreamCookies.has(ACW_SC_V2_COOKIE)) {
+    upstreamCookies.set(ACW_SC_V2_COOKIE, normalizeAcwCookieValue(configuredCookie));
+  }
+
+  return Array.from(upstreamCookies.entries())
+    .map(([name, value]) => `${name}=${value}`)
+    .join('; ');
+}
+
+function normalizeAcwCookieValue(value) {
+  const match = String(value).match(/(?:^|;\s*)acw_sc__v2=([^;]+)/);
+  return match ? match[1].trim() : String(value).trim();
+}
+
+function rememberSetCookies(headers) {
+  const values = typeof headers.getSetCookie === 'function'
+    ? headers.getSetCookie()
+    : splitSetCookieHeader(headers.get('set-cookie'));
+
+  for (const value of values) {
+    const pair = value.split(';')[0];
+    const separatorIndex = pair.indexOf('=');
+    if (separatorIndex <= 0) continue;
+    upstreamCookies.set(pair.slice(0, separatorIndex).trim(), pair.slice(separatorIndex + 1).trim());
+  }
+}
+
+function splitSetCookieHeader(value) {
+  if (!value) return [];
+  return value.split(/,(?=\s*[^;,]+=)/).map((item) => item.trim()).filter(Boolean);
+}
+
+function isHtmlResponse(response, text) {
+  const contentType = response.headers.get('content-type') || '';
+  const trimmed = text.trimStart();
+  return contentType.includes('text/html') ||
+    trimmed.startsWith('<html') ||
+    trimmed.startsWith('<!doctype html') ||
+    /var\s+arg1\s*=/.test(text);
+}
+
+export function resolveAcwScV2Cookie(html) {
+  const arg1 = extractAcwArg1(html);
+  if (!arg1 || arg1.length !== ACW_SC_V2_UNSBOX_INDEXES.length) return null;
+  return hexXor(unsbox(arg1), ACW_SC_V2_KEY);
+}
+
+export function extractAcwArg1(html) {
+  const match = String(html).match(/var\s+arg1\s*=\s*['"]([0-9a-fA-F]+)['"]/);
+  return match ? match[1] : null;
+}
+
+function unsbox(value) {
+  const result = new Array(value.length);
+  for (let index = 0; index < ACW_SC_V2_UNSBOX_INDEXES.length; index += 1) {
+    result[ACW_SC_V2_UNSBOX_INDEXES[index]] = value[index];
+  }
+  return result.join('');
+}
+
+function hexXor(value, key) {
+  let result = '';
+  for (let index = 0; index < value.length && index < key.length; index += 2) {
+    const left = Number.parseInt(value.slice(index, index + 2), 16);
+    const right = Number.parseInt(key.slice(index, index + 2), 16);
+    result += (left ^ right).toString(16).padStart(2, '0');
+  }
+  return result;
 }
 
 function normalizeProduct(product, goodsType, shopToken) {
