@@ -34,6 +34,7 @@ function App() {
   const [adminAuthed, setAdminAuthed] = useState(() => Boolean(sessionStorage.getItem('adminPassword')));
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
   const [versionInfo, setVersionInfo] = useState(null);
   const [message, setMessage] = useState('');
   const [query, setQuery] = useState('');
@@ -87,6 +88,7 @@ function App() {
   const addShop = async (event) => {
     event.preventDefault();
     setLoading(true);
+    setPendingAction('addShop');
     setMessage(t('syncingShop'));
     try {
       const response = await fetch('/api/shops', {
@@ -101,11 +103,13 @@ function App() {
       setMessage(error.message);
     } finally {
       setLoading(false);
+      setPendingAction(null);
     }
   };
 
   const refreshShop = async (token) => {
     setLoading(true);
+    setPendingAction(`refreshShop:${token}`);
     setMessage(t('refreshingShop'));
     try {
       const response = await fetch(`/api/shops/${token}/refresh`, {
@@ -119,12 +123,14 @@ function App() {
       setMessage(error.message);
     } finally {
       setLoading(false);
+      setPendingAction(null);
     }
   };
 
   const refreshAll = async () => {
     if (!isAdminRoute || !adminAuthed) {
       setLoading(true);
+      setPendingAction('reloadData');
       setMessage(t('reloadingData'));
       try {
         await load();
@@ -133,11 +139,13 @@ function App() {
         setMessage(error.message);
       } finally {
         setLoading(false);
+        setPendingAction(null);
       }
       return;
     }
 
     setLoading(true);
+    setPendingAction('refreshAll');
     setMessage(t('refreshingAll'));
     try {
       const response = await fetch('/api/shops/refresh-all', {
@@ -154,11 +162,13 @@ function App() {
       setMessage(error.message);
     } finally {
       setLoading(false);
+      setPendingAction(null);
     }
   };
 
   const removeShop = async (token) => {
     setLoading(true);
+    setPendingAction(`removeShop:${token}`);
     try {
       const response = await fetch(`/api/shops/${token}`, {
         method: 'DELETE',
@@ -171,6 +181,7 @@ function App() {
       setMessage(error.message);
     } finally {
       setLoading(false);
+      setPendingAction(null);
     }
   };
 
@@ -197,6 +208,7 @@ function App() {
       return;
     }
 
+    setPendingAction('updatePassword');
     try {
       const response = await fetch('/api/settings', {
         method: 'PUT',
@@ -211,11 +223,14 @@ function App() {
       setMessage(t('passwordChangedRelogin'));
     } catch (error) {
       setMessage(error.message);
+    } finally {
+      setPendingAction(null);
     }
   };
 
   const loadVersionInfo = async (checkRemote = false) => {
     if (!isAdminRoute || !adminAuthed) return;
+    if (checkRemote) setPendingAction('checkVersion');
     if (checkRemote) setMessage(t('checkingUpdate'));
     try {
       const response = await fetch(`/api/version${checkRemote ? '?check=1' : ''}`, {
@@ -228,6 +243,8 @@ function App() {
       }
     } catch (error) {
       setMessage(error.message);
+    } finally {
+      if (checkRemote) setPendingAction(null);
     }
   };
 
@@ -235,6 +252,7 @@ function App() {
     if (!window.confirm(t('selfUpdate'))) return;
 
     setUpdating(true);
+    setPendingAction('selfUpdate');
     setMessage(t('updatingApp'));
     try {
       const response = await fetch('/api/update', {
@@ -250,6 +268,7 @@ function App() {
       setMessage(error.message);
     } finally {
       setUpdating(false);
+      setPendingAction(null);
     }
   };
 
@@ -385,9 +404,10 @@ function App() {
             <Clock3 size={16} />
             <span>{data.settings.autoRefreshEnabled ? t('refreshEvery', { minutes: data.settings.refreshIntervalMinutes || 15 }) : t('autoRefreshOff')}</span>
           </div>
-          <button className="secondary-button" onClick={refreshAll} disabled={loading}>
+          <button className="secondary-button" onClick={refreshAll} disabled={loading} aria-busy={pendingAction === (isAdminRoute ? 'refreshAll' : 'reloadData')}>
             <RefreshCcw size={16} />
             {isAdminRoute ? t('refreshNow') : t('reloadData')}
+            {pendingAction === (isAdminRoute ? 'refreshAll' : 'reloadData') ? <ButtonSpinner /> : null}
           </button>
           <p>{data.settings.lastAutoRefreshAt ? t('lastRefresh', { time: formatDate(data.settings.lastAutoRefreshAt, language) }) : t('neverAutoRefresh')}</p>
         </section>
@@ -417,6 +437,7 @@ function App() {
               selfUpdate={selfUpdate}
               loading={loading}
               updating={updating}
+              pendingAction={pendingAction}
               filteredProducts={filteredProducts}
               changeProductGroup={changeProductGroup}
               deleteProduct={deleteProduct}
@@ -496,6 +517,7 @@ function AdminView({
   selfUpdate,
   loading,
   updating,
+  pendingAction,
   filteredProducts,
   changeProductGroup,
   deleteProduct,
@@ -509,6 +531,7 @@ function AdminView({
   language
 }) {
   const [newPassword, setNewPassword] = useState('');
+  const versionBusy = updating || pendingAction === 'checkVersion' || pendingAction === 'selfUpdate';
 
   return (
     <>
@@ -524,9 +547,10 @@ function AdminView({
               <LinkIcon size={17} />
               <input id="shopUrl" value={shopUrl} onChange={(event) => setShopUrl(event.target.value)} placeholder="https://pay.ldxp.cn/shop/..." />
             </div>
-            <button className="primary-button" disabled={loading}>
+            <button className="primary-button" disabled={loading} aria-busy={pendingAction === 'addShop'}>
               <Plus size={17} />
               {t('addAndSync')}
+              {pendingAction === 'addShop' ? <ButtonSpinner /> : null}
             </button>
           </form>
         </div>
@@ -569,8 +593,9 @@ function AdminView({
             <div className="input-row">
               <input id="newAdminPassword" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder={t('newPasswordPlaceholder')} />
             </div>
-            <button className="secondary-button" type="button" onClick={() => { updateAdminPassword(newPassword); setNewPassword(''); }}>
+            <button className="secondary-button" type="button" onClick={() => { updateAdminPassword(newPassword); setNewPassword(''); }} disabled={pendingAction === 'updatePassword'} aria-busy={pendingAction === 'updatePassword'}>
               {t('saveNewPassword')}
+              {pendingAction === 'updatePassword' ? <ButtonSpinner /> : null}
             </button>
           </div>
         </div>
@@ -589,13 +614,15 @@ function AdminView({
             {versionInfo?.dirty ? <div className="warning-line">{t('localChanges')}</div> : null}
             {versionInfo?.remoteError ? <div className="warning-line">{versionInfo.remoteError}</div> : null}
             <div className="button-row">
-              <button className="secondary-button" type="button" onClick={() => loadVersionInfo(true)} disabled={updating}>
+              <button className="secondary-button" type="button" onClick={() => loadVersionInfo(true)} disabled={versionBusy} aria-busy={pendingAction === 'checkVersion'}>
                 <RefreshCcw size={16} />
                 {t('checkUpdate')}
+                {pendingAction === 'checkVersion' ? <ButtonSpinner /> : null}
               </button>
-              <button className="primary-button" type="button" onClick={selfUpdate} disabled={updating || versionInfo?.dirty}>
+              <button className="primary-button" type="button" onClick={selfUpdate} disabled={versionBusy || versionInfo?.dirty} aria-busy={pendingAction === 'selfUpdate'}>
                 <RefreshCcw size={16} />
                 {t('selfUpdate')}
+                {pendingAction === 'selfUpdate' ? <ButtonSpinner /> : null}
               </button>
             </div>
           </div>
@@ -620,11 +647,11 @@ function AdminView({
                 </div>
               </div>
               <div className="shop-actions">
-                <button title={t('refresh')} onClick={() => refreshShop(shop.token)} disabled={loading}>
-                  <RefreshCcw size={15} />
+                <button title={t('refresh')} onClick={() => refreshShop(shop.token)} disabled={loading} aria-busy={pendingAction === `refreshShop:${shop.token}`}>
+                  {pendingAction === `refreshShop:${shop.token}` ? <ButtonSpinner /> : <RefreshCcw size={15} />}
                 </button>
-                <button title={t('remove')} onClick={() => removeShop(shop.token)} disabled={loading}>
-                  <Trash2 size={15} />
+                <button title={t('remove')} onClick={() => removeShop(shop.token)} disabled={loading} aria-busy={pendingAction === `removeShop:${shop.token}`}>
+                  {pendingAction === `removeShop:${shop.token}` ? <ButtonSpinner /> : <Trash2 size={15} />}
                 </button>
               </div>
             </div>
@@ -650,6 +677,10 @@ function AdminView({
       <ProductTable data={data} filteredProducts={filteredProducts} changeProductGroup={changeProductGroup} deleteProduct={deleteProduct} t={t} language={language} />
     </>
   );
+}
+
+function ButtonSpinner() {
+  return <span className="button-spinner" aria-hidden="true" />;
 }
 
 function AdminLogin({ adminPassword, setAdminPassword, loginAdmin, t }) {

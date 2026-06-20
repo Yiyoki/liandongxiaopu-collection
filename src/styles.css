@@ -140,6 +140,27 @@ select {
   cursor: wait;
 }
 
+.button-spinner {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: spin 0.75s linear infinite;
+}
+
+.shop-actions .button-spinner {
+  width: 14px;
+  height: 14px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .view-nav {
   display: grid;
   grid-template-columns: 1fr 1fr;
