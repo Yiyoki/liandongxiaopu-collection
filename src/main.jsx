@@ -124,7 +124,16 @@ function App() {
 
   const refreshAll = async () => {
     if (!isAdminRoute || !adminAuthed) {
-      window.location.href = '/admin';
+      setLoading(true);
+      setMessage(t('reloadingData'));
+      try {
+        await load();
+        setMessage(t('dataReloaded'));
+      } catch (error) {
+        setMessage(error.message);
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
@@ -378,7 +387,7 @@ function App() {
           </div>
           <button className="secondary-button" onClick={refreshAll} disabled={loading}>
             <RefreshCcw size={16} />
-            {t('refreshNow')}
+            {isAdminRoute ? t('refreshNow') : t('reloadData')}
           </button>
           <p>{data.settings.lastAutoRefreshAt ? t('lastRefresh', { time: formatDate(data.settings.lastAutoRefreshAt, language) }) : t('neverAutoRefresh')}</p>
         </section>
